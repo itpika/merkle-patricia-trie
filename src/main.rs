@@ -19,24 +19,46 @@ fn main() {
     let mut t: Trie = Trie::new(ID::trie_id(Hash::default()));
     
     let mut s256 = Sha256::new();
-    for v in 0_u8..=132 {
+    let num = 0_u8..=133;
+    let ret_size = s256.output_bytes();
+    for v in num.clone() {
         s256.reset();
         s256.input(&[v]);
 
         
-        let ret_size = s256.output_bytes();
         let mut ret = Vec::from_iter(std::iter::repeat(0_u8).take(ret_size));
         s256.result(&mut ret);
         // println!("{}: {}",v, hex::encode(ret.clone()));
-        // s256.result_str()
-        // let value = Vec::from([v]);
-        t.update(ret.clone(), Vec::from([v])).unwrap();
+        t.try_update(ret.clone(), Vec::from([v])).unwrap();
         // println!("---");
+        let ret = t.try_get(t.root.clone(), ret.clone()).unwrap();
+        assert_ne!(ret, None);
+        if let Some(val) = ret {
+            assert_eq!(val, Vec::from([v]));
+        }
     }
-    println!("{}", t.root.fstring("".to_string()));
     let d = t.root.fstring("".to_string());
     s256.reset();
     s256.input_str(d.as_str());
+    println!("{}", d);
     println!("hash {} len {}", s256.result_str(), d.len());
+
+    for v in num {
+        s256.reset();
+        s256.input(&[v]);
+        
+        let ret_size = s256.output_bytes();
+        let mut ret = Vec::from_iter(std::iter::repeat(0_u8).take(ret_size));
+        s256.result(&mut ret);
+
+        let ret = t.try_get(t.root.clone(), ret.clone()).unwrap();
+        assert_ne!(ret, None);
+        if let Some(val) = ret {
+            assert_eq!(val, Vec::from([v]));
+        }
+    }
+
+
+    
 
 }

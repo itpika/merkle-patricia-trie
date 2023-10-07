@@ -57,42 +57,33 @@ impl Trie {
         // Trie { root: Rc::new(RefCell::new(NilNode)), owner: id.owner, unhashed: 0, root_full_node: None, root_short_node: None, root_hash_node: None, root_value_node: None }
         Trie { root: Rc::new(NilNode), owner: id.owner, unhashed: 0, root_full_node: None, root_short_node: None, root_hash_node: None, root_value_node: None }
     }
-    pub fn try_get_full_node(&self) -> Result<&FullNode, NodeError> {
-        match &self.root_full_node {
-            Some(full_node) => Ok(full_node),
-            None => Err(NodeError(String::from("not found full node")))
-        }
-    }
-    pub fn try_get_short_node(&self) -> Result<&ShortNode, NodeError> {
-        match &self.root_short_node {
-            Some(sn) => Ok(sn),
-            None => Err(NodeError(String::from("not found short node")))
-        }
-    }
-    pub fn try_get_value_node(&self) -> Result<&ValueNode, NodeError> {
-        match &self.root_value_node {
-            Some(sn) => Ok(sn),
-            None => Err(NodeError(String::from("not found value node")))
-        }
-    }
-    pub fn update(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Box<dyn Error>> {
+    // pub fn try_get_full_node(&self) -> Result<&FullNode, NodeError> {
+    //     match &self.root_full_node {
+    //         Some(full_node) => Ok(full_node),
+    //         None => Err(NodeError(String::from("not found full node")))
+    //     }
+    // }
+    // pub fn try_get_short_node(&self) -> Result<&ShortNode, NodeError> {
+    //     match &self.root_short_node {
+    //         Some(sn) => Ok(sn),
+    //         None => Err(NodeError(String::from("not found short node")))
+    //     }
+    // }
+    // pub fn try_get_value_node(&self) -> Result<&ValueNode, NodeError> {
+    //     match &self.root_value_node {
+    //         Some(sn) => Ok(sn),
+    //         None => Err(NodeError(String::from("not found value node")))
+    //     }
+    // }
+    pub fn try_update(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Box<dyn Error>> {
         let key = key_to_hex(key);
-        let n = if value.len() != 0 {
+        if value.len() != 0 {
             let (_, n) = self.insert(Rc::clone(&self.root), Vec::new(), key, Rc::new(ValueNode::new(value)))?;
-            n
+            self.root = n;
         } else {
             let (_, n) = self.delete(Rc::clone(&self.root), Vec::new(), key)?;
-            n
+            self.root = n;
         };
-        // n.into_full_node()
-        // match n.kind() {
-        //     NodeType::FullNode => self.root_full_node = Some(n.into_full_node()?),
-        //     NodeType::HashNode => self.root_hash_node = Some(n.into_hash_node()?),
-        //     NodeType::ValueNode => self.root_value_node = Some(n.into_value_node()?),
-        //     NodeType::ShortNode => self.root_short_node = Some(n.into_short_node()?),
-        //     _ => {} 
-        // }
-        self.root = n;
         Ok(())
     }
     fn new_flag(&self) -> node::NodeFlag {
@@ -194,14 +185,14 @@ impl Trie {
         todo!()
     }
 
-    pub fn try_get(&mut self, n: Rc<dyn Node>, key: Vec<u8>) -> Result<GetResult, Box<dyn Error>> {
+    pub fn try_get(&mut self, n: Rc<dyn Node>, key: Vec<u8>) -> Result<Option<Vec<u8>>, Box<dyn Error>> {
         let ret = self.get(n, key_to_hex(key), 0)?;
         if ret.did_resolve {
             self.root = Rc::clone(&ret.new_node);
         }
-        Ok(ret)
+        Ok(ret.value)
     }
-    fn get(&self, n: Rc<dyn Node>, key: Vec<u8>, pos: i64) -> Result<GetResult, Box<dyn Error>> {
+    fn get(&self, n: Rc<dyn Node>, key: Vec<u8>, pos: usize) -> Result<GetResult, Box<dyn Error>> {
         match n.kind() {
             NodeType::NullNode => {
                 Ok(GetResult::from(None, false, Rc::new(NilNode)))
@@ -212,10 +203,10 @@ impl Trie {
             },
             NodeType::ShortNode => {
                 let mut sn = n.into_short_node()?;
-                if sn.key.len() > key.len()- pos as usize ||  sn.key.eq(&Vec::from(&key[(pos as usize)..(pos as usize+sn.key.len())])){
+                if sn.key.len() > key.len()- pos ||  !sn.key.eq(&Vec::from(&key[pos..(pos + sn.key.len())])){
                     return Ok(GetResult::from(None, false, n));
                 }
-                let ret = self.get(Rc::clone(&sn.val), key, pos + sn.key.len() as i64)?;
+                let ret = self.get(Rc::clone(&sn.val), key, pos + sn.key.len())?;
                 if ret.did_resolve {
                     sn = n.into_short_node()?;
                     sn.val = ret.new_node;
@@ -223,8 +214,18 @@ impl Trie {
                 return Ok(GetResult::from(ret.value, ret.did_resolve, Rc::new(sn)));
             },
             NodeType::FullNode => {
-                
-                todo!()
+                let mut f_n = n.into_full_node()?;
+                let child_node = match &f_n.children[key[pos] as usize] {
+                    Some(v) => Rc::clone(v),
+                    None => Rc::new(NilNode),
+                };
+
+                let ret = self.get(child_node, key.clone(), pos+1)?;
+                if ret.did_resolve {
+                    f_n = n.into_full_node()?;
+                    f_n.children[key[pos] as usize] = Some(ret.new_node);
+                }
+                return Ok(GetResult::from(ret.value, ret.did_resolve, Rc::new(f_n)));
             },
             NodeType::HashNode => todo!(),
         }
