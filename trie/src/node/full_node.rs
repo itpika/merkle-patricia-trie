@@ -78,7 +78,8 @@ impl Node for FullNode {
                 }
             }
         }
-        resp.add(format!("\n{}] ", ind).as_str())
+        resp.add(&format!("\n{}] ", ind))
+        // resp.add(&g)
     }
 
     fn into_full_node(&self) -> Result<FullNode, crate::NodeError> {
