@@ -1,8 +1,8 @@
 
-use std::{rc::Rc, os, fs, ops::Add};
+use std::{rc::Rc, os, fs, ops::Add, cell::Cell, fmt};
 
 use crypto::{sha2::{Sha256, Sha224}, digest::Digest};
-use trie::{node::{hash_node, Node, NilNode}, ID, common::Hash, Trie};
+use trie::{node::{hash_node, Node, NilNode}, ID, common::{Hash, self}, Trie};
 
 
 
@@ -14,10 +14,36 @@ use trie::{node::{hash_node, Node, NilNode}, ID, common::Hash, Trie};
 //     println!("{:?}", arr);
 // }
 
-fn main() {
 
+// impl Add<Meters> for Millimeters {
+//     type Output = Millimeters;
+
+//     fn add(self, rhs: Meters) -> Self::Output {
+//         todo!()
+//     }
+// }
+
+// struct Get  {
+//     root: Rc<dyn Node>
+// }
+// impl Get {
+//     fn prefix(&self) -> Rc<dyn Node> {
+//         Rc::clone(&self.root)
+//     }
+// }
+
+
+fn main() {
+//     let s = Rc::new(RefCell::new("我很善变，还拥有多个主人".to_string()));
+
+//     let s1 = s.clone();
+//     let s2 = s.clone();
+//     // let mut s2 = s.borrow_mut();
+//     s2.borrow_mut().push_str(", oh yeah!");
     let mut t: Trie = Trie::new(ID::trie_id(Hash::default()));
-    
+
+    println!("{}", t.hash());
+    // return;    
     let mut s256 = Sha256::new();
     let num = 0_u64..=1000;
     let ret_size = s256.output_bytes();
@@ -49,6 +75,7 @@ fn main() {
         if v & 1 == 0 {
             t.try_update(ret.clone(), None).unwrap();
         }
+        // print!("get {} ", v);
         let ret = t.try_get(t.root.clone(), ret.clone()).unwrap();
         if v & 1 == 0 {
             assert_eq!(ret, None);

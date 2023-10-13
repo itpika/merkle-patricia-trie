@@ -1,6 +1,8 @@
 
 use std::{io::{Write, self}, rc::Rc, cell::RefCell};
 
+use crate::writer::EncodeBuffer;
+
 use super::{Node};
 
 
@@ -11,7 +13,7 @@ pub struct ShortNode {
 }
 
 impl ShortNode {
-    pub fn new(key: Vec<u8>, val: Rc<dyn Node>, flags: super::NodeFlag) -> Self {
+    pub(crate) fn new(key: Vec<u8>, val: Rc<dyn Node>, flags: super::NodeFlag) -> Self {
         ShortNode{key: key, val: val, flags: flags}
     }
 }
@@ -26,13 +28,31 @@ impl ShortNode {
 impl Node for ShortNode {
     // type MyType = ShortNode<T>;
     fn cache(&self) -> (Option<HashNode>, bool) {
-        return (Some(self.flags.hash.copy()), self.flags.dirty);
+        return (self.flags.get_hash_node(), self.flags.dirty);
     }
 
-    fn encode(&self, w: Rc<RefCell<dyn Write>>) -> io::Result<usize> {
-        let mut w = w.borrow_mut();
-        w.write(self.key.as_slice())
-        // self.val.encode(w)
+    // fn encode(&self, w: Rc<RefCell<dyn Write>>) -> io::Result<usize> {
+    //     let mut size = 0;
+    //     let mut wri = w.borrow_mut();
+    //     size += wri.write(self.key.as_slice())?;
+    //     if self.val.kind() != super::NodeType::NullNode {
+    //         size += self.val.encode(Rc::clone(&w))?;
+    //     } else {
+    //         size += wri.write(&[0x80])?;
+    //     }
+    //     Ok(size)
+    // }
+    fn encode(&self, w: Rc<RefCell<EncodeBuffer>>) {
+        let w_clone = Rc::clone(&w);
+        let mut wri = w_clone.borrow_mut();
+        wri.write_bytes(self.key.as_slice());
+
+        if self.val.kind() != super::NodeType::NullNode {
+            // self.val.encode(Rc::clone(&w));
+            self.val.encode(w);
+        } else {
+            wri.write(0x80);
+        }
     }
 
     fn fstring(&self, ind: String) -> String {

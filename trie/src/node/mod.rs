@@ -13,7 +13,8 @@ pub enum NodeType {
 pub trait Node {
     // type MyType;
     fn cache(&self) -> (Option<HashNode>, bool);
-    fn encode(&self, w: Rc<RefCell<dyn std::io::Write>>) -> io::Result<usize>;
+    // fn encode(&self, w: Rc<RefCell<dyn std::io::Write>>) -> io::Result<usize>;
+    fn encode(&self, w: Rc<RefCell<EncodeBuffer>>);
     fn fstring(&self, v: String) -> String;
     fn kind(&self) -> NodeType;
     fn into_value_node(&self) -> Result<ValueNode, NodeError> {
@@ -49,8 +50,7 @@ impl Node for NilNode {
         (None, false)
     }
 
-    fn encode(&self, w: Rc<RefCell<dyn std::io::Write>>) -> io::Result<usize> {
-        Ok(0)
+    fn encode(&self, w: Rc<RefCell<EncodeBuffer>>) {
     }
 
     fn fstring(&self, v: String) -> String {
@@ -62,20 +62,29 @@ impl Node for NilNode {
     }
 }
 
-pub struct NodeFlag {
-    pub(crate) hash: HashNode,
+pub(crate) struct NodeFlag {
+    pub(crate) hash: Option<HashNode>, // 表示是否计算有hash数据
     pub(crate) dirty: bool, 
 }
 
 impl Clone for NodeFlag {
     fn clone(&self) -> Self {
-        Self { hash: (self.hash.copy()), dirty: (self.dirty) }
+        match &self.hash {
+            Some(v) => Self { hash: Some(v.copy()), dirty: (self.dirty) },
+            None => Self { hash: None, dirty: (self.dirty) },
+        }
     }
 }
 
 impl NodeFlag {
     pub fn default() -> Self {
-        NodeFlag { hash: HashNode::default(), dirty: false }
+        NodeFlag { hash: None, dirty: false }
+    }
+    pub fn get_hash_node(&self) -> Option<HashNode> {
+        match &self.hash {
+            Some(v) => Some(v.copy()),
+            None => None,
+        }
     }
 }
 
@@ -98,3 +107,4 @@ pub use value_node::ValueNode;
 pub use value_node::NIL_VALUE_NODE;
 
 use crate::NodeError;
+use crate::writer::EncodeBuffer;

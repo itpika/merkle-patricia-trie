@@ -1,0 +1,35 @@
+use std::{io::Write, rc::Rc};
+
+
+pub struct EncodeBuffer {
+    data_buf: Vec<u8>
+}
+
+impl EncodeBuffer {
+    pub fn new() -> Self {
+        EncodeBuffer { data_buf: Vec::new() }
+    }
+}
+
+impl EncodeBuffer {
+    pub fn write_bytes(&mut self, buf: &[u8]) {
+        self.data_buf.extend_from_slice(buf);
+    }
+    pub fn write(&mut self, b: u8) {
+        self.data_buf.push(b);
+    }
+    pub fn encode_bytes(&self) -> Vec<u8> {
+        self.data_buf.clone()
+    }
+}
+
+// impl Write for EncodeBuffer {
+//     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+//         self.data_buf.extend_from_slice(buf);
+//         Ok(buf.len())
+//     }
+
+//     fn flush(&mut self) -> std::io::Result<()> {
+//         todo!()
+//     }
+// }

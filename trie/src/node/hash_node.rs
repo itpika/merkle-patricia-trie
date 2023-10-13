@@ -1,9 +1,11 @@
-use std::{io::{Write, self}, rc::Rc, cell::RefCell};
+use std::{rc::Rc, cell::RefCell};
+
+use crate::writer::EncodeBuffer;
 
 use super::Node;
 
 
-pub struct HashNode (Box<[u8; 32]>);
+pub struct HashNode (pub(crate) [u8; 32]);
 // type HashNode2 = Box<[u8; 32]>;
 
 // impl Node for HashNode2 {
@@ -22,11 +24,14 @@ pub struct HashNode (Box<[u8; 32]>);
 // }
 
 impl HashNode {
-    pub fn new(v: [u8;32]) -> Self {
-        HashNode(Box::new(v))
+    pub fn new() -> Self {
+        HashNode([0_u8;32])
+    }
+    pub fn from(v: [u8;32]) -> Self {
+        HashNode(v)
     }
     pub fn default() -> Self {
-        HashNode(Box::new([0_u8;32]))
+        HashNode([0_u8;32])
     }
     pub fn copy(&self) -> Self {
         HashNode(self.0.clone())
@@ -40,19 +45,19 @@ impl Node for HashNode {
         return (None, true);
     }
 
-    fn encode(&self, w: Rc<RefCell<dyn Write>>) -> io::Result<usize> {
-        let mut w = w.borrow_mut();
-        w.write(self.0.as_slice())
+    fn encode(&self, w: Rc<RefCell<EncodeBuffer>>) {
+        let mut wri = w.as_ref().borrow_mut();
+        wri.write_bytes(self.0.as_slice());
     }
     fn kind(&self) -> super::NodeType {
         super::NodeType::HashNode
     }
     fn fstring(&self, _: String) -> String {
-        format!("<{}>", hex::encode(*self.0))
+        format!("<{}>", hex::encode(self.0))
     }
 
     fn into_hash_node(&self) -> Result<HashNode, crate::NodeError> {
-        Ok(HashNode(self.0.clone()))
+        Ok(HashNode(self.0))
     }
 }
 

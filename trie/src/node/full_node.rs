@@ -1,7 +1,10 @@
+use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::io;
 use std::ops::Add;
 use std::rc::Rc;
+
+use crate::writer::EncodeBuffer;
 
 use super::{Node, NodeFlag};
 use super::INDICES;
@@ -28,7 +31,7 @@ impl FullNode {
     pub fn default() -> Self {
         FullNode { children: [None,None,None,None,None,None,None,None,None,None,None,None,None,None,None,None,None], flags: NodeFlag::default() }
     }
-    pub fn from(flags: NodeFlag) -> Self {
+    pub(crate) fn from(flags: NodeFlag) -> Self {
         FullNode { children: [None,None,None,None,None,None,None,None,None,None,None,None,None,None,None,None,None], flags: flags }
     }
 }
@@ -42,27 +45,24 @@ impl FullNode {
 impl Node for FullNode {
     // type MyType = FullNode<T>;
     fn cache(&self) -> (Option<HashNode>, bool) {
-        return (Some(self.flags.hash.copy()), self.flags.dirty);
+        (self.flags.get_hash_node(), self.flags.dirty)
     }
     fn kind(&self) -> super::NodeType {
         super::NodeType::FullNode
     }
 
-    fn encode(&self, w: Rc<RefCell<dyn std::io::Write>>) -> io::Result<usize> {
-        let mut size: usize = 0;
+    fn encode(&self, w: Rc<RefCell<EncodeBuffer>>) {
         for v in self.children.iter() {
             match v {
                 None => {
                     let mut w_clone = w.as_ref().borrow_mut();
-                    size += w_clone.write(&[0x80])?;
+                    w_clone.write(0x80);
                 },
                 Some(node) => {
-                    let w_clone = Rc::clone(&w);
-                    size += node.encode(w_clone)?;
+                    node.encode(Rc::clone(&w));
                 },
             }
         }
-        Ok(size)
     }
 
     fn fstring(&self, ind: String) -> String {
@@ -89,7 +89,7 @@ impl Node for FullNode {
                 Some(n) => {
                     cp.children[i] = Some(Rc::clone(n));
                 },
-                None => cp.children[i] = None
+                None => {}
             }
         }
         cp.flags = self.flags.clone();

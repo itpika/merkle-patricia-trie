@@ -117,6 +117,7 @@ name = "trie"
 version = "0.1.0"
 dependencies = [
  "hex",
+ "rust-crypto",
 ]
 
 [[package]]

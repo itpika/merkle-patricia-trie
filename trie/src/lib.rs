@@ -1,7 +1,9 @@
 use std::{rc::Rc, cell::RefCell, fmt, error::Error};
 
-use  common::Hash;
+use  common::{Hash, key_to_hex, prefix_len};
 use node::{Node, NodeType, NilNode, ValueNode, FullNode, HashNode, ShortNode};
+
+use crate::hasher::Hasher;
 
 pub struct ID {
     state_root: Hash,
@@ -77,7 +79,8 @@ impl Trie {
     //     }
     // }
     pub fn try_update(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) -> Result<(), Box<dyn Error>> {
-        let key = key_to_hex(key);
+        self.unhashed += 1;
+        let key = key_to_hex(key.as_slice());
         match value {
             Some(value) => {
                 let (_, n) = self.insert(Rc::clone(&self.root), Vec::new(), key, Rc::new(ValueNode::new(value)))?;
@@ -92,7 +95,7 @@ impl Trie {
     }
     fn new_flag(&self) -> node::NodeFlag {
         node::NodeFlag{
-            hash: HashNode::default(),
+            hash: None,
             dirty: true,
         }
     }
@@ -120,7 +123,7 @@ impl Trie {
                 NodeType::ShortNode => {
                     let n = n.into_short_node()?;
                     // let n = self.try_get_short_node()?;
-                    let match_len = prefix_len(key.clone(), n.key.clone());
+                    let match_len = prefix_len(key.as_slice(), n.key.as_slice());
                     // 相同长度等于key
                     let mut next_prefix = prefix.clone();
                     if match_len == n.key.len() {
@@ -191,7 +194,7 @@ impl Trie {
         match n.kind() {
             NodeType::ShortNode => {
                 let sn = n.into_short_node()?;
-                let match_len = prefix_len(sn.key.clone(), key.clone());
+                let match_len = prefix_len(sn.key.as_slice(), key.as_slice());
                 if match_len < sn.key.len() {
                     return  Ok((false, n));
                 }
@@ -265,7 +268,7 @@ impl Trie {
                 if pos < 17 { // 含有一个子节点
                     if pos != 16 { // pos不指向最后一个子节点
                         if let Some(nn) = &f_n.children[pos] {
-                            if nn.kind() == NodeType::ShortNode  {
+                            if nn.kind() == NodeType::ShortNode  { // 最后一个子节点是shortNode,pos拼接key后返回一个shortNode
                                 let sn = nn.into_short_node()?;
                                 let mut new_key = Vec::from([pos as u8]);
                                 new_key.extend(sn.key);
@@ -273,7 +276,7 @@ impl Trie {
                             }
                         }
                     }
-
+                    // 不是shortNode,pos作为key,返回一个shortNode
                     if let Some(nn) = &f_n.children[pos] {
                         return Ok((true, Rc::new(ShortNode::new(Vec::from([pos as u8]), Rc::clone(nn), self.new_flag()))));
                     }
@@ -286,7 +289,7 @@ impl Trie {
     }
 
     pub fn try_get(&mut self, n: Rc<dyn Node>, key: Vec<u8>) -> Result<Option<Vec<u8>>, Box<dyn Error>> {
-        let ret = self.get(n, key_to_hex(key), 0)?;
+        let ret = self.get(n, key_to_hex(key.as_slice()), 0)?;
         if ret.did_resolve {
             self.root = ret.new_node;
         }
@@ -295,6 +298,7 @@ impl Trie {
     fn get(&self, n: Rc<dyn Node>, key: Vec<u8>, pos: usize) -> Result<GetResult, Box<dyn Error>> {
         match n.kind() {
             NodeType::NullNode => {
+                // println!("null node");
                 Ok(GetResult::from(None, false, Rc::new(NilNode)))
             },
             NodeType::ValueNode => {
@@ -304,6 +308,7 @@ impl Trie {
             NodeType::ShortNode => {
                 let mut sn = n.into_short_node()?;
                 if sn.key.len() > key.len()- pos ||  !sn.key.eq(&Vec::from(&key[pos..(pos + sn.key.len())])){
+                    // println!("not found");
                     return Ok(GetResult::from(None, false, n));
                 }
                 let ret = self.get(Rc::clone(&sn.val), key, pos + sn.key.len())?;
@@ -330,6 +335,24 @@ impl Trie {
             NodeType::HashNode => todo!(),
         }
     }
+    // 计算默克尔hash根
+    pub fn hash(&mut self) -> Hash {
+        let (hs, cached) = self.hash_root();
+        self.root = cached; // 计算了hash后的root重新赋值
+        hs
+    }
+    fn hash_root(&mut self) -> (Hash, Rc<dyn Node>) {
+        if self.root.kind() == NodeType::NullNode {
+            return (Hash::empty_root_hash(), Rc::clone(&self.root));
+        }
+
+        let mut h = Hasher::new(self.unhashed >= 100);
+        let (hashed, cached) = h.hash_node(Rc::clone(&self.root), true);
+        self.unhashed = 0; // 未hash的数量重置
+        // 强转hashNode
+        let hn = hashed.into_hash_node().unwrap();
+        (Hash::from(hn.0), cached)
+    }
 }
 
 
@@ -345,43 +368,7 @@ impl GetResult {
     }
 }
 
-// key扩展
-pub(crate) fn key_to_hex(key: Vec<u8>) -> Vec<u8> {
-    let mut bt: Vec<u8> = Vec::new();
-    for v in key.iter() {
-        bt.push(v/16);
-        bt.push(v%16);
-    }
-    bt.push(16);
-    bt
-}
-
-// key的相同前缀长度
-pub(crate) fn prefix_len(a:Vec<u8>, b: Vec<u8>) -> usize {
-    let mut i = 0_usize;
-    let mut length = a.len();
-    if b.len() < length {
-        length = b.len()
-    }
-    while i < length {
-        match a.get(i) {
-            Some(a_v) => {
-                match b.get(i) {
-                    Some(b_v) => {
-                        if a_v != b_v {
-                            break;
-                        }
-                    },
-                    _ => {}
-                }
-            },
-            _ => {}
-        }
-        i += 1;
-    }
-    i
-}
-
 pub mod node;
 pub mod common;
-
+pub mod hasher;
+pub mod writer;
