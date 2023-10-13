@@ -18,6 +18,7 @@ impl Hasher {
     }
 
     pub(crate) fn hash_data(&mut self, data: &[u8]) -> HashNode {
+        self.hash.reset();
         self.hash.input(data);
         // let mut out = Vec::from_iter(std::iter::repeat(0_u8).take(self.out_hash_size));
         let mut out = [0_u8;32];
