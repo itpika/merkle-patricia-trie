@@ -1,5 +1,3 @@
-use std::{io::Write, rc::Rc};
-
 
 pub struct EncodeBuffer {
     data_buf: Vec<u8>
@@ -18,8 +16,17 @@ impl EncodeBuffer {
     pub fn write(&mut self, b: u8) {
         self.data_buf.push(b);
     }
+    pub fn size(&mut self) -> usize {
+        self.data_buf.len()
+    }
     pub fn encode_bytes(&self) -> Vec<u8> {
+        // let mut dst = Vec::from_iter(std::iter::repeat(0_u8).take(self.data_buf.len()));
+        // dst.extend_from_slice(self.data_buf.as_slice());
+        // dst
         self.data_buf.clone()
+    }
+    pub fn reset(&mut self) {
+        self.data_buf = Vec::new();
     }
 }
 

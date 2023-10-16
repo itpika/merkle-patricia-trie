@@ -1,4 +1,4 @@
-use std::{rc::Rc, cell::RefCell, borrow::BorrowMut};
+use std::{rc::Rc, cell::RefCell};
 
 use crate::writer::EncodeBuffer;
 
@@ -46,7 +46,7 @@ impl Node for ValueNode {
     }
 
     fn encode(&self, w: Rc<RefCell<EncodeBuffer>>) {
-        let mut wri = w.as_ref().borrow_mut();
+        let mut wri = w.borrow_mut();
         wri.write_bytes(self.0.as_slice());
     }
 

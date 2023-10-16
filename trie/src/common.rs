@@ -63,7 +63,7 @@ pub(crate) fn hex_to_compact(mut data: &[u8]) -> Vec<u8> {
         buf[0] |= data[0]; 
         data = &data[1..];
     }
-    decode_nibbles(data, buf.as_mut_slice());
+    decode_nibbles(data, &mut buf[1..]);
     buf
 }
 

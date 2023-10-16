@@ -1,5 +1,4 @@
 use std::{rc::Rc, cell::RefCell};
-
 use crate::writer::EncodeBuffer;
 
 use super::Node;
@@ -46,7 +45,7 @@ impl Node for HashNode {
     }
 
     fn encode(&self, w: Rc<RefCell<EncodeBuffer>>) {
-        let mut wri = w.as_ref().borrow_mut();
+        let mut wri = w.borrow_mut();
         wri.write_bytes(self.0.as_slice());
     }
     fn kind(&self) -> super::NodeType {

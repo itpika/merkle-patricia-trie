@@ -43,15 +43,16 @@ impl Node for ShortNode {
     //     Ok(size)
     // }
     fn encode(&self, w: Rc<RefCell<EncodeBuffer>>) {
-        let w_clone = Rc::clone(&w);
-        let mut wri = w_clone.borrow_mut();
-        wri.write_bytes(self.key.as_slice());
+        {
+            let mut wri = w.borrow_mut();
+            wri.write_bytes(self.key.as_slice());
+        }
 
         if self.val.kind() != super::NodeType::NullNode {
             // self.val.encode(Rc::clone(&w));
             self.val.encode(w);
         } else {
-            wri.write(0x80);
+            w.borrow_mut().write(0x80);
         }
     }
 

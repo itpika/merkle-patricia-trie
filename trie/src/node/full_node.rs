@@ -1,6 +1,4 @@
-use std::borrow::BorrowMut;
 use std::cell::RefCell;
-use std::io;
 use std::ops::Add;
 use std::rc::Rc;
 
@@ -55,7 +53,7 @@ impl Node for FullNode {
         for v in self.children.iter() {
             match v {
                 None => {
-                    let mut w_clone = w.as_ref().borrow_mut();
+                    let mut w_clone = w.borrow_mut();
                     w_clone.write(0x80);
                 },
                 Some(node) => {

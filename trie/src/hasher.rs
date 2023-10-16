@@ -1,11 +1,11 @@
 use std::{rc::Rc, cell::RefCell, io::Write};
 
-use crypto::{sha2::{Sha256}, digest::Digest};
+use crypto::{sha2::{Sha256}, digest::Digest, hmac, sha3::Sha3};
 
-use crate::{node::{HashNode, Node, NodeType, ShortNode}, common, writer::{EncodeBuffer}};
+use crate::{node::{HashNode, Node, NodeType, ShortNode, FullNode, ValueNode}, common, writer::{EncodeBuffer}};
 
 pub(crate) struct Hasher {
-    hash: Sha256,
+    hash: Sha3,
     parallel: bool,
     out_hash_size: usize,
     w: Rc<RefCell<EncodeBuffer>>,
@@ -13,7 +13,8 @@ pub(crate) struct Hasher {
 
 impl Hasher {
     pub(crate) fn new(parallel: bool) -> Hasher {
-        let mut s256 = Sha256::new();
+        // let mut s256 = Sha256::new();
+        let mut s256 = Sha3::keccak256();
         Hasher { hash: s256, parallel, out_hash_size: s256.output_bytes(), w: Rc::new(RefCell::new(EncodeBuffer::new())) }
     }
 
@@ -49,13 +50,24 @@ impl Hasher {
                 return (hashed, Rc::new(cached_node));
             },
             NodeType::FullNode => {
+                let f_n = n.into_full_node().unwrap();
+                // 计算子节点hash
+                let (collapsed, mut cached_node) = self.hash_full_node_children(f_n);
+                // 计算fullNode自己的hash
+                let hashed = self.fullnode_to_hash(collapsed, force);
 
+                if hashed.kind() == NodeType::HashNode {
+                    // hash缓存起来
+                    cached_node.flags.hash = Some(hashed.into_hash_node().unwrap());
+                } else {
+                    cached_node.flags.hash = None
+                }
+                return (hashed, Rc::new(cached_node));
             },
             _ => { // 正常情况不会到此
                 return (Rc::clone(&n), n);
             }
         }
-        todo!()
     }
     // 计算shortNode子节点hash
     fn hash_short_node_children(&mut self, n: ShortNode) -> (ShortNode, ShortNode) {
@@ -82,8 +94,45 @@ impl Hasher {
         Rc::new(hd)
     }
 
+    fn hash_full_node_children(&mut self, n: FullNode) -> (FullNode, FullNode) {
+        let mut collapsed = n.into_full_node().unwrap();
+        let mut cached = n.into_full_node().unwrap();
+        // if self.parallel {
+
+        // } else {
+        // }
+        for (i, _) in [0u8; 16].iter().enumerate() {
+            match &n.children[i] {
+                Some(child_node) => {
+                    let (n1, n2) = self.hash_node(Rc::clone(child_node), false);
+                    collapsed.children[i] = Some(n1);
+                    cached.children[i] = Some(n2);
+                },
+                None => { // 计算hash赋个空valueNode
+                    collapsed.children[i] = Some(Rc::new(ValueNode::default()));
+                }
+            }
+        }
+        (collapsed, cached)
+    }
+
+    // 计算fullNode节点hash
+    fn fullnode_to_hash(&mut self, n: FullNode, force: bool) -> Rc<dyn Node> {
+        // node编码进bufer
+        n.encode(Rc::clone(&self.w));
+        let enc = self.encod_bytes();
+        if enc.len() < 32 && !force {
+            return Rc::new(n);
+        }
+        // 编码后的数据计算hash
+        let hd = self.hash_data(enc.as_slice());
+        Rc::new(hd)
+    }
+
     // 取出buffer中的所有数据
     fn encod_bytes(&self) -> Vec<u8> {
-        self.w.borrow().encode_bytes()
+        let ret = self.w.borrow().encode_bytes();
+        self.w.borrow_mut().reset();
+        ret
     }
 }

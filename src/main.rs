@@ -1,7 +1,7 @@
 
-use std::{rc::Rc, os, fs, ops::Add, cell::Cell, fmt};
+use std::{rc::Rc, os, fs, ops::Add, cell::{Cell, RefCell}, fmt};
 
-use crypto::{sha2::{Sha256, Sha224}, digest::Digest};
+use crypto::{sha2::{Sha256, Sha224}, digest::Digest, sha3::Sha3};
 use trie::{node::{hash_node, Node, NilNode}, ID, common::{Hash, self}, Trie};
 
 
@@ -34,18 +34,11 @@ use trie::{node::{hash_node, Node, NilNode}, ID, common::{Hash, self}, Trie};
 
 
 fn main() {
-//     let s = Rc::new(RefCell::new("我很善变，还拥有多个主人".to_string()));
-
-//     let s1 = s.clone();
-//     let s2 = s.clone();
-//     // let mut s2 = s.borrow_mut();
-//     s2.borrow_mut().push_str(", oh yeah!");
     let mut t: Trie = Trie::new(ID::trie_id(Hash::default()));
 
-    println!("{}", t.hash());
     // return;    
     let mut s256 = Sha256::new();
-    let num = 0_u64..=1000;
+    let num = 0_u64..=13000;
     let ret_size = s256.output_bytes();
     for v in num.clone() {
         s256.reset();
@@ -93,5 +86,6 @@ fn main() {
     s256.input_str(d.as_str());
     // println!("{}", d);
     println!("hash {} len {}", s256.result_str(), d.len());
+    println!("root hash {}", t.hash());
 
 }
