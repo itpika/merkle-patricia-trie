@@ -1,7 +1,8 @@
 
-use std::{rc::Rc, os, fs, ops::Add, cell::{Cell, RefCell}, fmt};
+use std::{rc::Rc, cell::{Cell, RefCell}, fmt, future, time::{SystemTime, self}};
 
 use crypto::{sha2::{Sha256, Sha224}, digest::Digest, sha3::Sha3};
+use tokio::time::sleep;
 use trie::{node::{hash_node, Node, NilNode}, ID, common::{Hash, self}, Trie};
 
 
@@ -14,31 +15,42 @@ use trie::{node::{hash_node, Node, NilNode}, ID, common::{Hash, self}, Trie};
 //     println!("{:?}", arr);
 // }
 
+async fn eat() {
+    println!("eat");
+    let v = song().await;
+    println!("{}", v);
+}
 
-// impl Add<Meters> for Millimeters {
-//     type Output = Millimeters;
+async fn song() -> String {
+    println!("song");
+    // sleep(std::time::Duration::from_secs(3))
+    sleep(std::time::Duration::from_secs(3)).await;
+    "song over".to_string()
+}
 
-//     fn add(self, rhs: Meters) -> Self::Output {
-//         todo!()
-//     }
-// }
+async fn lon() {
+    println!("lon");
+}
 
-// struct Get  {
-//     root: Rc<dyn Node>
-// }
-// impl Get {
-//     fn prefix(&self) -> Rc<dyn Node> {
-//         Rc::clone(&self.root)
-//     }
-// }
+async fn do_work() {
+    let w1 = eat();
+    let w3 = lon();
+    futures::join!(w1, w3);
+}
 
+use futures::{executor::block_on};
+
+#[tokio::main]
+async fn main2() {
+    block_on(do_work());
+}
 
 fn main() {
     let mut t: Trie = Trie::new(ID::trie_id(Hash::default()));
 
     // return;    
     let mut s256 = Sha256::new();
-    let num = 0_u64..=13000;
+    let num = 0_u64..=130000;
     let ret_size = s256.output_bytes();
     for v in num.clone() {
         s256.reset();
@@ -49,7 +61,7 @@ fn main() {
         s256.result(&mut ret);
         // println!("{}: {}",v, hex::encode(ret.clone()));
         t.try_update(ret.clone(), Some(vs.to_vec())).unwrap();
-        let ret = t.try_get(t.root.clone(), ret.clone()).unwrap();
+        let ret = t.try_get(t.root.clone(), ret.as_slice()).unwrap();
         assert_ne!(ret, None);
         if let Some(val) = ret {
             assert_eq!(val, vs.to_vec());
@@ -69,7 +81,7 @@ fn main() {
             t.try_update(ret.clone(), None).unwrap();
         }
         // print!("get {} ", v);
-        let ret = t.try_get(t.root.clone(), ret.clone()).unwrap();
+        let ret = t.try_get(t.root.clone(), ret.as_slice()).unwrap();
         if v & 1 == 0 {
             assert_eq!(ret, None);
             // println!("{} Null",v);
@@ -86,6 +98,12 @@ fn main() {
     s256.input_str(d.as_str());
     // println!("{}", d);
     println!("hash {} len {}", s256.result_str(), d.len());
+    let st = now();
     println!("root hash {}", t.hash());
+    println!("{:?}", now()-st);
 
+}
+
+fn now() -> time::Duration {
+    SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap()
 }

@@ -1,6 +1,7 @@
-use std::{rc::Rc, cell::RefCell, io::Write};
+use std::{rc::Rc, cell::RefCell, io::Write, future, process::Output};
 
 use crypto::{sha2::{Sha256}, digest::Digest, hmac, sha3::Sha3};
+use futures::{Future, executor::block_on};
 
 use crate::{node::{HashNode, Node, NodeType, ShortNode, FullNode, ValueNode}, common, writer::{EncodeBuffer}};
 
@@ -44,7 +45,7 @@ impl Hasher {
                     // hash缓存起来
                     cached_node.flags.hash = Some(hashed.into_hash_node().unwrap());
                 } else {
-                    cached_node.flags.hash = None
+                    cached_node.flags.hash = None;
                 }
 
                 return (hashed, Rc::new(cached_node));
@@ -53,6 +54,7 @@ impl Hasher {
                 let f_n = n.into_full_node().unwrap();
                 // 计算子节点hash
                 let (collapsed, mut cached_node) = self.hash_full_node_children(f_n);
+                // let (collapsed, mut cached_node) = block_on(self.hash_full_node_children(f_n));
                 // 计算fullNode自己的hash
                 let hashed = self.fullnode_to_hash(collapsed, force);
 
@@ -69,6 +71,7 @@ impl Hasher {
             }
         }
     }
+
     // 计算shortNode子节点hash
     fn hash_short_node_children(&mut self, n: ShortNode) -> (ShortNode, ShortNode) {
         let mut collapsed = n.into_short_node().unwrap();
@@ -94,22 +97,50 @@ impl Hasher {
         Rc::new(hd)
     }
 
+    async fn async_hash_full_node_children(n: &Option<Rc<dyn Node>>, collapsed: Rc<RefCell<FullNode>>, cached: Rc<RefCell<FullNode>>, i: usize) {
+        let mut new_hasher = Hasher::new(false);
+        match n {
+            Some(child_node) => {
+                let (n1, n2) = new_hasher.hash_node(Rc::clone(child_node), false);
+                collapsed.borrow_mut().children[i] = Some(n1);
+                cached.borrow_mut().children[i] = Some(n2);
+            },
+            None => { // 计算hash赋个空valueNode
+                collapsed.borrow_mut().children[i] = Some(Rc::new(ValueNode::default()));
+            }
+        }
+    }
+
     fn hash_full_node_children(&mut self, n: FullNode) -> (FullNode, FullNode) {
         let mut collapsed = n.into_full_node().unwrap();
         let mut cached = n.into_full_node().unwrap();
-        // if self.parallel {
+        
+        if self.parallel && false {
+            // let collapsed = Rc::new(RefCell::new(collapsed));
+            // let cached = Rc::new(RefCell::new(cached));
 
-        // } else {
-        // }
-        for (i, _) in [0u8; 16].iter().enumerate() {
-            match &n.children[i] {
-                Some(child_node) => {
-                    let (n1, n2) = self.hash_node(Rc::clone(child_node), false);
-                    collapsed.children[i] = Some(n1);
-                    cached.children[i] = Some(n2);
-                },
-                None => { // 计算hash赋个空valueNode
-                    collapsed.children[i] = Some(Rc::new(ValueNode::default()));
+            // // let arr = [impl Future<Output = ()>;16];
+            // let mut arr = Vec::with_capacity(16);
+            // for (i, _) in [0u8; 16].iter().enumerate() {
+            //     let g = Hasher::async_hash_full_node_children(&n.children[i], 
+            //         Rc::clone(&collapsed), Rc::clone(&cached), i);
+            //     arr.push(g);
+            // }
+            // futures::future::join_all(arr);
+            // let g = collapsed.borrow();
+            // // let f = *g;
+            // return (*g, *cached.borrow());
+        } else {
+            for (i, _) in [0u8; 16].iter().enumerate() {
+                match &n.children[i] {
+                    Some(child_node) => {
+                        let (n1, n2) = self.hash_node(Rc::clone(child_node), false);
+                        collapsed.children[i] = Some(n1);
+                        cached.children[i] = Some(n2);
+                    },
+                    None => { // 计算hash赋个空valueNode
+                        collapsed.children[i] = Some(Rc::new(ValueNode::default()));
+                    }
                 }
             }
         }
