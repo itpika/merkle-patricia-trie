@@ -44,7 +44,7 @@ pub(crate) struct NodeFlag {
 impl Clone for NodeFlag {
     fn clone(&self) -> Self {
         match &self.hash {
-            Some(v) => Self { hash: Some(v.copy()), dirty: (self.dirty) },
+            Some(v) => Self { hash: Some(v.clone()), dirty: (self.dirty) },
             None => Self { hash: None, dirty: (self.dirty) },
         }
     }
@@ -56,7 +56,7 @@ impl NodeFlag {
     }
     pub fn get_hash_node(&self) -> Option<HashNode> {
         match &self.hash {
-            Some(v) => Some(v.copy()),
+            Some(v) => Some(v.clone()),
             None => None,
         }
     }

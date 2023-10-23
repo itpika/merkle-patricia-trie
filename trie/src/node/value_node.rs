@@ -29,11 +29,14 @@ impl ValueNode {
     pub fn default() -> Self {
         ValueNode(Vec::new())
     }
-    pub fn copy(&self) -> ValueNode {
-        ValueNode(self.0.clone())
-    }
     pub fn equal(&self, v: Self) -> bool {
        self.0.eq(&v.0)
+    }
+}
+
+impl Clone for ValueNode {
+    fn clone(&self) -> Self {
+        ValueNode(self.0.clone())
     }
 }
 
@@ -51,13 +54,6 @@ impl ValueNode {
 
     pub(crate) fn fstring(&self, _: String) -> String {
         format!("{} ", hex::encode(self.0.as_slice()))
-    }
-
-    pub(crate) fn kind(&self) -> super::NodeType {
-        super::NodeType::ValueNode
-    }
-    pub(crate) fn into_value_node(&self) -> ValueNode {
-        ValueNode(self.0.clone())
     }
 }
 

@@ -29,11 +29,13 @@ impl HashNode {
     pub fn default() -> Self {
         HashNode([0_u8;32])
     }
-    pub fn copy(&self) -> Self {
+}
+
+impl Clone for HashNode {
+    fn clone(&self) -> Self {
         HashNode(self.0.clone())
     }
 }
-
 
 impl HashNode {
     // type MyType = HashNode;
@@ -45,15 +47,9 @@ impl HashNode {
         let mut wri = w.borrow_mut();
         wri.write_bytes(self.0.as_slice());
     }
-    pub(crate) fn kind(&self) -> super::NodeType {
-        super::NodeType::HashNode
-    }
+
     pub(crate) fn fstring(&self, _: String) -> String {
         format!("<{}>", hex::encode(self.0))
-    }
-
-    pub(crate) fn into_hash_node(&self) -> HashNode {
-        HashNode(self.0)
     }
 }
 

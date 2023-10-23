@@ -126,6 +126,8 @@ fn main() {
     let st = now();
     println!("root hash {}", t.hash());
     println!("{:?}", now()-st);
+    println!("root hash {}", t.hash());
+    println!("{:?}", now()-st);
 
 }
 

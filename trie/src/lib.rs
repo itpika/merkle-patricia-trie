@@ -86,7 +86,7 @@ impl TrieNode {
     }
     fn to_value_node(&self) -> ValueNode {
         match self {
-            TrieNode::Value(v) => v.copy(),
+            TrieNode::Value(v) => v.clone(),
             _ => {
                 todo!()
             }
@@ -94,7 +94,7 @@ impl TrieNode {
     }
     fn to_full_node(&self) -> FullNode {
         match self {
-            TrieNode::Full(v) => v.into_full_node(),
+            TrieNode::Full(v) => v.clone(),
             _ => {
                 todo!()
             }
@@ -102,7 +102,7 @@ impl TrieNode {
     }
     fn to_short_node(&self) -> ShortNode {
         match self {
-            TrieNode::Short(v) => v.into_short_node(),
+            TrieNode::Short(v) => v.clone(),
             _ => {
                 todo!()
             }
@@ -110,7 +110,7 @@ impl TrieNode {
     }
     fn to_hash_node(&self) -> HashNode {
         match self {
-            TrieNode::Hash(v) => v.copy(),
+            TrieNode::Hash(v) => v.clone(),
             _ => {
                 todo!()
             }
@@ -172,7 +172,6 @@ impl Trie {
                     return Ok((true, Rc::new(TrieNode::Short(ShortNode::new(key, Rc::clone(&value), self.new_flag())))));
                 },
                 TrieNode::Short(n) => {
-                    // let n = n.into_short_node()?;
                     let match_len = prefix_len(key.as_slice(), n.key.as_slice());
                     // 相同长度等于key
                     let mut next_prefix = prefix.clone();
@@ -229,7 +228,7 @@ impl Trie {
                         return Ok((false, Rc::clone(&self.root)));
                     }
                     // 插槽对应位置设置成新的生成好的node
-                    let mut f_n = n.into_full_node();
+                    let mut f_n = n.clone();
                     f_n.flags = self.new_flag();
                     f_n.children[key[0] as usize] = Some(nn);
                     return Ok((true, Rc::new(TrieNode::Full(f_n))));
@@ -255,17 +254,28 @@ impl Trie {
                 if !dirty {
                     return  Ok((false, n));
                 }
-                match child_node.kind() {
-                    NodeType::ShortNode => { // 如果也是shortNode，把key合并一下，作为一个新的shortNode
-                        let child = child_node.to_short_node();
+                match &*child_node {
+                    TrieNode::Short(child) => { // 如果也是shortNode，把key合并一下，作为一个新的shortNode
+                        // let child = child_node.to_short_node();
                         let mut new_key = sn.key.clone();
-                        new_key.extend(child.key);
-                        return Ok((true, Rc::new(TrieNode::Short(ShortNode::new(new_key, child.val, self.new_flag())))));
+                        new_key.extend_from_slice(child.key.as_slice());
+                        return Ok((true, Rc::new(TrieNode::Short(ShortNode::new(new_key, Rc::clone(&child.val), self.new_flag())))));
                     },
                     _ => { // 如果是其它类型，直接作为shortNode的value
                         return Ok((true, Rc::new(TrieNode::Short(ShortNode::new(sn.key.clone(), child_node, self.new_flag())))));
                     }
                 }
+                // match child_node.kind() {
+                //     NodeType::ShortNode => { // 如果也是shortNode，把key合并一下，作为一个新的shortNode
+                //         let child = child_node.to_short_node();
+                //         let mut new_key = sn.key.clone();
+                //         new_key.extend(child.key);
+                //         return Ok((true, Rc::new(TrieNode::Short(ShortNode::new(new_key, child.val, self.new_flag())))));
+                //     },
+                //     _ => { // 如果是其它类型，直接作为shortNode的value
+                //         return Ok((true, Rc::new(TrieNode::Short(ShortNode::new(sn.key.clone(), child_node, self.new_flag())))));
+                //     }
+                // }
             },
             TrieNode::Hash(_) => todo!(),
             TrieNode::Value(_) => {
@@ -288,7 +298,7 @@ impl Trie {
                     return Ok((false, n));
                 }
                 
-                let mut f_n = f_n.into_full_node();
+                let mut f_n = f_n.clone();
                 // f_n = f_n.into_full_node()?; // copy
                 f_n.flags = self.new_flag();
                 
@@ -322,6 +332,12 @@ impl Trie {
                                 new_key.extend(sn.key);
                                 return Ok((true, Rc::new(TrieNode::Short(ShortNode::new(new_key, sn.val, self.new_flag())))));
                             }
+                            // if nn.kind() == NodeType::ShortNode  { // 最后一个子节点是shortNode,pos拼接key后返回一个shortNode
+                            //     let sn = nn.to_short_node();
+                            //     let mut new_key = Vec::from([pos as u8]);
+                            //     new_key.extend(sn.key);
+                            //     return Ok((true, Rc::new(TrieNode::Short(ShortNode::new(new_key, sn.val, self.new_flag())))));
+                            // }
                         }
                     }
                     // 不是shortNode,pos作为key,返回一个shortNode
@@ -360,7 +376,7 @@ impl Trie {
                 }
                 let ret = self.get(Rc::clone(&sn.val), key, pos + sn.key.len())?;
                 if ret.did_resolve {
-                    let mut nn = sn.into_short_node();
+                    let mut nn = sn.clone();
                     nn.val = ret.new_node;
                     return Ok(GetResult::from(ret.value, ret.did_resolve, Rc::new(TrieNode::Short(nn))));
                 }

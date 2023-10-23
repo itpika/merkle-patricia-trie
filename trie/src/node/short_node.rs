@@ -33,7 +33,6 @@ impl ShortNode {
             let mut wri = w.borrow_mut();
             wri.write_bytes(self.key.as_slice());
         }
-
         if self.val.kind() != super::NodeType::NullNode {
             // self.val.encode(Rc::clone(&w));
             self.val.encode(w);
@@ -48,12 +47,12 @@ impl ShortNode {
         format!("{{{}: {}}} ", hex::encode(&k_str), v_str)
     }
 
-    pub(crate) fn kind(&self) -> super::NodeType {
-        super::NodeType::ShortNode
-    }
+}
 
-    pub(crate) fn into_short_node(&self) -> ShortNode {
-        ShortNode { key: self.key.clone(), val: Rc::clone(&self.val), flags: self.flags.clone() }
+impl Clone for ShortNode {
+    fn clone(&self) -> Self {
+        Self { key: self.key.clone(), val: Rc::clone(&self.val), flags: self.flags.clone() }
+        // Self { key: self.key.clone(), val: self.val.clone(), flags: self.flags.clone() }
     }
 }
 

@@ -15,7 +15,7 @@ pub(crate) struct Hasher {
 impl Hasher {
     pub(crate) fn new(parallel: bool) -> Hasher {
         // let mut s256 = Sha256::new();
-        let mut s256 = Sha3::keccak256();
+        let s256 = Sha3::keccak256();
         Hasher { hash: s256, parallel, out_hash_size: s256.output_bytes(), w: Rc::new(RefCell::new(EncodeBuffer::new())) }
     }
 
@@ -34,10 +34,9 @@ impl Hasher {
             return (Rc::new(TrieNode::Hash(v)), n);
         }
         match &*n {
-            TrieNode::Short(sn) => {
-                let mut sn = n.to_short_node();
+            TrieNode::Short(n) => {
                 // shortNode子节点hash
-                let (collapsed, mut cached_node) = self.hash_short_node_children(sn);
+                let (collapsed, mut cached_node) = self.hash_short_node_children(n);
                 // shortNode计算hash
                 let hashed = self.shortnode_to_hash(collapsed, force);
 
@@ -51,9 +50,9 @@ impl Hasher {
                 return (hashed, Rc::new(TrieNode::Short(cached_node)));
             },
             TrieNode::Full(f_n) => {
-                let   = n.to_full_node();
                 // 计算子节点hash
                 let (collapsed, mut cached_node) = self.hash_full_node_children(f_n);
+                // let (collapsed, mut cached_node) = block_on(self.hash_full_node_children(f_n));
                 // 计算fullNode自己的hash
                 let hashed = self.fullnode_to_hash(collapsed, force);
 
@@ -72,16 +71,16 @@ impl Hasher {
     }
 
     // 计算shortNode子节点hash
-    fn hash_short_node_children(&mut self, mut n: ShortNode) -> (ShortNode, ShortNode) {
-        let mut collapsed = n.into_short_node();
-        // let mut cached = n.into_short_node().unwrap();
+    fn hash_short_node_children(&mut self, n: &ShortNode) -> (ShortNode, ShortNode) {
+        let mut collapsed = n.clone();
+        let mut cached = n.clone();
 
         collapsed.key = common::hex_to_compact(&n.key);
 
         if n.val.kind() == NodeType::FullNode || n.val.kind() == NodeType::ShortNode {
-            (collapsed.val, n.val) = self.hash_node(n.val, false);
+            (collapsed.val, cached.val) = self.hash_node(Rc::clone(&n.val), false);
         }
-        (collapsed, n)
+        (collapsed, cached)
     }
     // 计算shortNode节点hash
     fn shortnode_to_hash(&mut self, n: ShortNode, force: bool) -> Rc<TrieNode> {
@@ -110,9 +109,9 @@ impl Hasher {
     //     }
     // }
 
-    fn hash_full_node_children(&mut self, mut n: FullNode) -> (FullNode, FullNode) {
-        let mut collapsed = n.into_full_node();
-        // let mut cached = n.into_full_node().unwrap();
+    fn hash_full_node_children(&mut self, n: &FullNode) -> (FullNode, FullNode) {
+        let mut collapsed = n.clone();
+        let mut cached = n.clone();
         
         if self.parallel && false {
             // let collapsed = Rc::new(RefCell::new(collapsed));
@@ -135,7 +134,7 @@ impl Hasher {
                     Some(child_node) => {
                         let (n1, n2) = self.hash_node(Rc::clone(child_node), false);
                         collapsed.children[i] = Some(n1);
-                        n.children[i] = Some(n2);
+                        cached.children[i] = Some(n2);
                     },
                     None => { // 计算hash赋个空valueNode
                         collapsed.children[i] = Some(Rc::new(TrieNode::Value(ValueNode::default())));
@@ -143,7 +142,7 @@ impl Hasher {
                 }
             }
         }
-        (collapsed, n)
+        (collapsed, cached)
     }
 
     // 计算fullNode节点hash

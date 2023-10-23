@@ -28,9 +28,6 @@ impl FullNode {
     pub(crate) fn cache(&self) -> (Option<HashNode>, bool) {
         (self.flags.get_hash_node(), self.flags.dirty)
     }
-    pub(crate) fn kind(&self) -> super::NodeType {
-        super::NodeType::FullNode
-    }
 
     pub(crate) fn encode(&self, w: Rc<RefCell<EncodeBuffer>>) {
         for v in self.children.iter() {
@@ -62,8 +59,10 @@ impl FullNode {
         resp.add(&format!("\n{}] ", ind))
         // resp.add(&g)
     }
+}
 
-    pub(crate) fn into_full_node(&self) -> FullNode {
+impl Clone for FullNode {
+    fn clone(&self) -> Self {
         let mut cp = FullNode::default();
         for (i,v) in self.children.iter().enumerate() {
             match v {
