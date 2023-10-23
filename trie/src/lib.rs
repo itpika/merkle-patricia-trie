@@ -1,7 +1,8 @@
 use std::{rc::Rc, cell::RefCell, fmt, error::Error};
 
 use  common::{Hash, key_to_hex, prefix_len};
-use node::{Node, NodeType, NilNode, ValueNode, FullNode, HashNode, ShortNode};
+use node::{NodeType, NilNode, ValueNode, FullNode, HashNode, ShortNode};
+use writer::EncodeBuffer;
 
 use crate::hasher::Hasher;
 
@@ -38,17 +39,87 @@ impl NodeError {
     }
 }
 
+pub enum TrieNode {
+    Short(ShortNode),
+    Full(FullNode),
+    Hash(HashNode),
+    Value(ValueNode),
+    Nil(NilNode)
+}
+
+impl TrieNode {
+    fn kind(&self) -> NodeType {
+        match *self {
+            TrieNode::Short(_) => NodeType::ShortNode,
+            TrieNode::Full(_) => NodeType::FullNode,
+            TrieNode::Hash(_) => NodeType::HashNode,
+            TrieNode::Value(_) => NodeType::ValueNode,
+            TrieNode::Nil(_) => NodeType::NullNode,
+        }
+    }
+    fn cache(&self) -> (Option<HashNode>, bool) {
+        match self {
+            TrieNode::Short(n) => n.cache(),
+            TrieNode::Full(n) => n.cache(),
+            TrieNode::Hash(n) => n.cache(),
+            TrieNode::Value(n) => n.cache(),
+            TrieNode::Nil(n) => n.cache(),
+        }
+    }
+    fn encode(&self, w: Rc<RefCell<EncodeBuffer>>) {
+        match self {
+            TrieNode::Short(n) => n.encode(w),
+            TrieNode::Full(n) => n.encode(w),
+            TrieNode::Hash(n) => n.encode(w),
+            TrieNode::Value(n) => n.encode(w),
+            TrieNode::Nil(n) => n.encode(w),
+        };
+    }
+    pub fn fstring(&self, v: String) -> String {
+        match self {
+            TrieNode::Short(n) => n.fstring(v),
+            TrieNode::Full(n) => n.fstring(v),
+            TrieNode::Hash(n) => n.fstring(v),
+            TrieNode::Value(n) => n.fstring(v),
+            TrieNode::Nil(n) => n.fstring(v),
+        }
+    }
+    fn to_value_node(&self) -> ValueNode {
+        match self {
+            TrieNode::Value(v) => v.copy(),
+            _ => {
+                todo!()
+            }
+        }
+    }
+    fn to_full_node(&self) -> FullNode {
+        match self {
+            TrieNode::Full(v) => v.into_full_node(),
+            _ => {
+                todo!()
+            }
+        }
+    }
+    fn to_short_node(&self) -> ShortNode {
+        match self {
+            TrieNode::Short(v) => v.into_short_node(),
+            _ => {
+                todo!()
+            }
+        }
+    }
+    fn to_hash_node(&self) -> HashNode {
+        match self {
+            TrieNode::Hash(v) => v.copy(),
+            _ => {
+                todo!()
+            }
+        }
+    }
+}
 
 pub struct Trie {
-    // root: T::MyType,
-    // root: Rc<RefCell<dyn Node>>,
-    pub root: Rc<dyn Node>,
-    // root_full_node: Option<FullNode>,
-    // root_short_node: Option<ShortNode>,
-    // root_hash_node: Option<HashNode>,
-    // root_value_node: Option<ValueNode>,
-    // root: Rc<RefCell<T>>,
-    // root: T,
+    pub root: Rc<TrieNode>,
     owner: Hash,
 
     unhashed: u64
@@ -58,32 +129,14 @@ impl Trie {
     pub fn new(id: ID) -> Self {
         // Trie { root: Rc::new(RefCell::new(NilNode)), owner: id.owner, unhashed: 0, root_full_node: None, root_short_node: None, root_hash_node: None, root_value_node: None }
         // Trie { root: Rc::new(NilNode), owner: id.owner, unhashed: 0, root_full_node: None, root_short_node: None, root_hash_node: None, root_value_node: None }
-        Trie { root: Rc::new(NilNode), owner: id.owner, unhashed: 0 }
+        Trie { root: Rc::new(TrieNode::Nil(NilNode)), owner: id.owner, unhashed: 0 }
     }
-    // pub fn try_get_full_node(&self) -> Result<&FullNode, NodeError> {
-    //     match &self.root_full_node {
-    //         Some(full_node) => Ok(full_node),
-    //         None => Err(NodeError(String::from("not found full node")))
-    //     }
-    // }
-    // pub fn try_get_short_node(&self) -> Result<&ShortNode, NodeError> {
-    //     match &self.root_short_node {
-    //         Some(sn) => Ok(sn),
-    //         None => Err(NodeError(String::from("not found short node")))
-    //     }
-    // }
-    // pub fn try_get_value_node(&self) -> Result<&ValueNode, NodeError> {
-    //     match &self.root_value_node {
-    //         Some(sn) => Ok(sn),
-    //         None => Err(NodeError(String::from("not found value node")))
-    //     }
-    // }
     pub fn try_update(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) -> Result<(), Box<dyn Error>> {
         self.unhashed += 1;
         let key = key_to_hex(key.as_slice());
         match value {
             Some(value) => {
-                let (_, n) = self.insert(Rc::clone(&self.root), Vec::new(), key, Rc::new(ValueNode::new(value)))?;
+                let (_, n) = self.insert(Rc::clone(&self.root), Vec::new(), key, Rc::new(TrieNode::Value(ValueNode::new(value))))?;
                 self.root = n;
             },
             None => {
@@ -100,14 +153,12 @@ impl Trie {
         }
     }
     // 插入node
-    fn insert(&self, n: Rc<dyn Node>, prefix: Vec<u8>, key: Vec<u8>, value: Rc<dyn Node>) -> Result<(bool, Rc<dyn Node>), NodeError> {
+    fn insert(&self, n: Rc<TrieNode>, prefix: Vec<u8>, key: Vec<u8>, value: Rc<TrieNode>) -> Result<(bool, Rc<TrieNode>), NodeError> {
         if key.len() == 0 {
             // 如果key为空
-            match n.kind() {
-                NodeType::ValueNode => {
-                    let vn = n.into_value_node()?;
-                    let val_node = value.into_value_node()?;
-                    // *self.root_value_node = &Some(val_node);
+            match &*n {
+                TrieNode::Value(vn) => {
+                    let val_node = value.to_value_node();
                     return Ok((!vn.equal(val_node), Rc::clone(&value)));
                 },
                 _ => {
@@ -116,13 +167,12 @@ impl Trie {
             }
         } else {
             // println!("kind {:?}", n.kind());
-            match n.kind() {
-                NodeType::NullNode => {
-                    return Ok((true, Rc::new(ShortNode::new(key, Rc::clone(&value), self.new_flag()))));
-                }
-                NodeType::ShortNode => {
-                    let n = n.into_short_node()?;
-                    // let n = self.try_get_short_node()?;
+            match &*n {
+                TrieNode::Nil(_) => {
+                    return Ok((true, Rc::new(TrieNode::Short(ShortNode::new(key, Rc::clone(&value), self.new_flag())))));
+                },
+                TrieNode::Short(n) => {
+                    // let n = n.into_short_node()?;
                     let match_len = prefix_len(key.as_slice(), n.key.as_slice());
                     // 相同长度等于key
                     let mut next_prefix = prefix.clone();
@@ -134,42 +184,41 @@ impl Trie {
                         if !dirty {
                             return Ok((false, Rc::clone(&self.root)));
                         }
-                        return Ok((true, Rc::new(ShortNode::new(n.key.clone(), nn, self.new_flag()))));
+                        return Ok((true, Rc::new(TrieNode::Short(ShortNode::new(n.key.clone(), nn, self.new_flag())))));
                     }
 
                     let mut branch = FullNode::from(self.new_flag());
                     
                     next_prefix.extend(&n.key[..match_len+1]);
-                    let (_, n1) = self.insert(Rc::new(NilNode), next_prefix, Vec::from(&n.key[match_len+1..]), Rc::clone(&n.val))?;
+                    let (_, n1) = self.insert(Rc::new(TrieNode::Nil(NilNode)), next_prefix, Vec::from(&n.key[match_len+1..]), Rc::clone(&n.val))?;
                     branch.children[n.key[match_len] as usize] = Some(n1);
                     
                     let mut next_prefix2 = prefix.clone();
                     next_prefix2.extend(&key[..match_len+1]);
-                    let (_, n2) = self.insert(Rc::new(NilNode), next_prefix2, Vec::from(&key[match_len+1..]), Rc::clone(&value))?;
+                    let (_, n2) = self.insert(Rc::new(TrieNode::Nil(NilNode)), next_prefix2, Vec::from(&key[match_len+1..]), Rc::clone(&value))?;
                     branch.children[key[match_len] as usize] = Some(n2);
 
                     if match_len == 0 { // key没有相同前缀，作为分支节点返回
-                        return Ok((true, Rc::new(branch)));
+                        return Ok((true, Rc::new(TrieNode::Full(branch))));
                     }
 
-                    return Ok((true, Rc::new(ShortNode::new(Vec::from(&key[..match_len]), Rc::new(branch), self.new_flag()))));
+                    return Ok((true, Rc::new(TrieNode::Short(ShortNode::new(Vec::from(&key[..match_len]), Rc::new(TrieNode::Full(branch)), self.new_flag())))));
                 }
-                NodeType::ValueNode => {
+                TrieNode::Value(_) => {
                     return Err(NodeError::from("invalid node"))
-                },
-                NodeType::HashNode => {
+                }
+                TrieNode::Hash(_) => {
                     return Err(NodeError::from("insert HashNode todo"))
                 },
-                NodeType::FullNode => {
-                    // let n = self.try_get_full_node()?;
-                    let n = n.into_full_node()?;
+                TrieNode::Full(n) => {
+                    // let n = n.into_full_node()?;
                     // 获取key[0]插槽位置的node
                     let slot_node = match &n.children[key[0] as usize] {
                         Some(child_node) => {
                             Rc::clone(child_node)
                         },
                         None => {
-                            Rc::new(NilNode)
+                            Rc::new(TrieNode::Nil(NilNode))
                         }
                     };
                     let mut next_prefix = prefix.clone();
@@ -180,57 +229,57 @@ impl Trie {
                         return Ok((false, Rc::clone(&self.root)));
                     }
                     // 插槽对应位置设置成新的生成好的node
-                    let mut f_n = n.into_full_node()?;
+                    let mut f_n = n.into_full_node();
                     f_n.flags = self.new_flag();
                     f_n.children[key[0] as usize] = Some(nn);
-                    return Ok((true, Rc::new(f_n)));
+                    return Ok((true, Rc::new(TrieNode::Full(f_n))));
                 },
             }
         }
     }
 
-    fn delete(&self, n: Rc<dyn Node>, mut prefix: Vec<u8>, key: Vec<u8>) -> Result<(bool, Rc<dyn Node>), NodeError> {
+    fn delete(&self, n: Rc<TrieNode>, mut prefix: Vec<u8>, key: Vec<u8>) -> Result<(bool, Rc<TrieNode>), NodeError> {
         // print!(" {:?} ", n.kind());
-        match n.kind() {
-            NodeType::ShortNode => {
-                let sn = n.into_short_node()?;
+        match &*n {
+            TrieNode::Short(sn) => {
+                // let sn = n.to_short_node();
                 let match_len = prefix_len(sn.key.as_slice(), key.as_slice());
                 if match_len < sn.key.len() {
                     return  Ok((false, n));
                 }
                 if match_len == key.len() { // 公共长度等于key,匹配到了
-                    return Ok((true, Rc::new(NilNode)));
+                    return Ok((true, Rc::new(TrieNode::Nil(NilNode))));
                 }
                 prefix.extend(&key[..sn.key.len()]);
-                let (dirty, child_node) = self.delete(sn.val, prefix, Vec::from(&key[sn.key.len()..]))?;
+                let (dirty, child_node) = self.delete(Rc::clone(&sn.val), prefix, Vec::from(&key[sn.key.len()..]))?;
                 if !dirty {
                     return  Ok((false, n));
                 }
                 match child_node.kind() {
                     NodeType::ShortNode => { // 如果也是shortNode，把key合并一下，作为一个新的shortNode
-                        let child = child_node.into_short_node()?;
+                        let child = child_node.to_short_node();
                         let mut new_key = sn.key.clone();
                         new_key.extend(child.key);
-                        return Ok((true, Rc::new(ShortNode::new(new_key, child.val, self.new_flag()))));
+                        return Ok((true, Rc::new(TrieNode::Short(ShortNode::new(new_key, child.val, self.new_flag())))));
                     },
                     _ => { // 如果是其它类型，直接作为shortNode的value
-                        return Ok((true, Rc::new(ShortNode::new(sn.key, child_node, self.new_flag()))));
+                        return Ok((true, Rc::new(TrieNode::Short(ShortNode::new(sn.key.clone(), child_node, self.new_flag())))));
                     }
                 }
             },
-            NodeType::HashNode => todo!(),
-            NodeType::ValueNode => {
-                Ok((true, Rc::new(NilNode)))
+            TrieNode::Hash(_) => todo!(),
+            TrieNode::Value(_) => {
+                Ok((true, Rc::new(TrieNode::Nil(NilNode))))
             },
-            NodeType::NullNode => {
-                Ok((false, Rc::new(NilNode)))
+            TrieNode::Nil(_) => {
+                Ok((false, Rc::new(TrieNode::Nil(NilNode))))
             },
-            NodeType::FullNode => {
+            TrieNode::Full(f_n) => {
 
-                let mut f_n = n.into_full_node()?;
+                // let mut f_n = n.to_full_node();
                 let child_node = match &f_n.children[key[0] as usize] {
                     Some(v) => Rc::clone(v),
-                    None => Rc::new(NilNode),
+                    None => Rc::new(TrieNode::Nil(NilNode)),
                 };
                 prefix.push(key[0]);
                 let (dirty, nn) = self.delete(child_node, prefix, Vec::from(&key[1..]))?;
@@ -239,12 +288,13 @@ impl Trie {
                     return Ok((false, n));
                 }
                 
-                f_n = f_n.into_full_node()?; // copy
+                let mut f_n = f_n.into_full_node();
+                // f_n = f_n.into_full_node()?; // copy
                 f_n.flags = self.new_flag();
                 
                 if nn.kind() != NodeType::NullNode {
                     f_n.children[key[0] as usize] = Some(Rc::clone(&nn));
-                    return Ok((true, Rc::new(f_n)));
+                    return Ok((true, Rc::new(TrieNode::Full(f_n))));
                 } else { // 返回的node为NullNode, 说明已经被删除了,子节点位置赋予None
                     f_n.children[key[0] as usize] = None;
                 }
@@ -267,113 +317,74 @@ impl Trie {
                     if pos != 16 { // pos不指向最后一个子节点
                         if let Some(nn) = &f_n.children[pos] {
                             if nn.kind() == NodeType::ShortNode  { // 最后一个子节点是shortNode,pos拼接key后返回一个shortNode
-                                let sn = nn.into_short_node()?;
+                                let sn = nn.to_short_node();
                                 let mut new_key = Vec::from([pos as u8]);
                                 new_key.extend(sn.key);
-                                return Ok((true, Rc::new(ShortNode::new(new_key, sn.val, self.new_flag()))));
+                                return Ok((true, Rc::new(TrieNode::Short(ShortNode::new(new_key, sn.val, self.new_flag())))));
                             }
                         }
                     }
                     // 不是shortNode,pos作为key,返回一个shortNode
                     if let Some(nn) = &f_n.children[pos] {
-                        return Ok((true, Rc::new(ShortNode::new(Vec::from([pos as u8]), Rc::clone(nn), self.new_flag()))));
+                        return Ok((true, Rc::new(TrieNode::Short(ShortNode::new(Vec::from([pos as u8]), Rc::clone(nn), self.new_flag())))));
                     }
                 }
                 
-                Ok((true, Rc::new(f_n)))
+                Ok((true, Rc::new(TrieNode::Full(f_n))))
             },
             
         }
     }
 
-    pub fn try_get(&mut self, n: Rc<dyn Node>, key: &[u8]) -> Result<Option<Vec<u8>>, Box<dyn Error>> {
+    pub fn try_get(&mut self, n: Rc<TrieNode>, key: &[u8]) -> Result<Option<Vec<u8>>, Box<dyn Error>> {
         let ret = self.get(n, key_to_hex(key).as_slice(), 0)?;
         if ret.did_resolve {
             self.root = ret.new_node;
         }
         Ok(ret.value)
     }
-    fn get(&self, n: Rc<dyn Node>, key: &[u8], pos: usize) -> Result<GetResult, Box<dyn Error>> {
-        match n.kind() {
-            NodeType::NullNode => {
+    fn get(&self, n: Rc<TrieNode>, key: &[u8], pos: usize) -> Result<GetResult, Box<dyn Error>> {
+        match &*n {
+            TrieNode::Value(vn) => {
+                Ok(GetResult::from(Some(vn.0.clone()), false, n))    
+            },
+            TrieNode::Nil(_) => {
                 // println!("null node");
-                Ok(GetResult::from(None, false, Rc::new(NilNode)))
+                return Ok(GetResult::from(None, false, Rc::new(TrieNode::Nil(NilNode))))
             },
-            NodeType::ValueNode => {
-                let vn = n.into_value_node()?;
-                Ok(GetResult::from(Some(vn.0), false, n))
-            },
-            NodeType::ShortNode => {
-                let mut sn = n.into_short_node()?;
+            TrieNode::Short(sn) => {
+                // let mut sn = n.to_short_node();
                 if sn.key.len() > key.len()- pos ||  !sn.key.eq(&Vec::from(&key[pos..(pos + sn.key.len())])){
                     // println!("not found");
                     return Ok(GetResult::from(None, false, n));
                 }
                 let ret = self.get(Rc::clone(&sn.val), key, pos + sn.key.len())?;
                 if ret.did_resolve {
-                    sn = n.into_short_node()?;
-                    sn.val = ret.new_node;
+                    let mut nn = sn.into_short_node();
+                    nn.val = ret.new_node;
+                    return Ok(GetResult::from(ret.value, ret.did_resolve, Rc::new(TrieNode::Short(nn))));
                 }
-                return Ok(GetResult::from(ret.value, ret.did_resolve, Rc::new(sn)));
+                return Ok(GetResult::from(ret.value, ret.did_resolve, n));
             },
-            NodeType::FullNode => {
-                let mut f_n = n.into_full_node()?;
+            TrieNode::Full(f_n) => {
+                // let mut f_n = n.to_full_node();
                 let child_node = match &f_n.children[key[pos] as usize] {
                     Some(v) => Rc::clone(v),
-                    None => Rc::new(NilNode),
+                    None => Rc::new(TrieNode::Nil(NilNode)),
                 };
 
                 let ret = self.get(child_node, key, pos+1)?;
                 if ret.did_resolve {
-                    f_n = n.into_full_node()?;
+                    let mut f_n = n.to_full_node();
                     f_n.children[key[pos] as usize] = Some(ret.new_node);
+                    return Ok(GetResult::from(ret.value, ret.did_resolve, Rc::new(TrieNode::Full(f_n))));
                 }
-                return Ok(GetResult::from(ret.value, ret.did_resolve, Rc::new(f_n)));
+                return Ok(GetResult::from(ret.value, ret.did_resolve, n));
             },
-            NodeType::HashNode => todo!(),
+            TrieNode::Hash(_) => todo!(),
         }
     }
 
-    // fn get2(&self, n: Rc<dyn Node>, key: Vec<u8>, pos: usize) -> Result<GetResult, Box<dyn Error>> {
-    //     match n.kind() {
-    //         NodeType::NullNode => {
-    //             // println!("null node");
-    //             Ok(GetResult::from(None, false, Rc::new(NilNode)))
-    //         },
-    //         NodeType::ValueNode => {
-    //             let vn = n.into_value_node()?;
-    //             Ok(GetResult::from(Some(vn.0), false, n))
-    //         },
-    //         NodeType::ShortNode => {
-    //             let mut sn = n.into_short_node()?;
-    //             if sn.key.len() > key.len()- pos ||  !sn.key.eq(&Vec::from(&key[pos..(pos + sn.key.len())])){
-    //                 // println!("not found");
-    //                 return Ok(GetResult::from(None, false, n));
-    //             }
-    //             let ret = self.get(Rc::clone(&sn.val), key, pos + sn.key.len())?;
-    //             if ret.did_resolve {
-    //                 sn = n.into_short_node()?;
-    //                 sn.val = ret.new_node;
-    //             }
-    //             return Ok(GetResult::from(ret.value, ret.did_resolve, Rc::new(sn)));
-    //         },
-    //         NodeType::FullNode => {
-    //             let mut f_n = n.into_full_node()?;
-    //             let child_node = match &f_n.children[key[pos] as usize] {
-    //                 Some(v) => Rc::clone(v),
-    //                 None => Rc::new(NilNode),
-    //             };
-
-    //             let ret = self.get(child_node, key.clone(), pos+1)?;
-    //             if ret.did_resolve {
-    //                 f_n = n.into_full_node()?;
-    //                 f_n.children[key[pos] as usize] = Some(ret.new_node);
-    //             }
-    //             return Ok(GetResult::from(ret.value, ret.did_resolve, Rc::new(f_n)));
-    //         },
-    //         NodeType::HashNode => todo!(),
-    //     }
-    // }
     
     // 计算默克尔hash根
     pub fn hash(&mut self) -> Hash {
@@ -381,7 +392,7 @@ impl Trie {
         self.root = cached; // 计算了hash后的root重新赋值
         hs
     }
-    fn hash_root(&mut self) -> (Hash, Rc<dyn Node>) {
+    fn hash_root(&mut self) -> (Hash, Rc<TrieNode>) {
         if self.root.kind() == NodeType::NullNode {
             return (Hash::empty_root_hash(), Rc::clone(&self.root));
         }
@@ -390,7 +401,7 @@ impl Trie {
         let (hashed, cached) = h.hash_node(Rc::clone(&self.root), true);
         self.unhashed = 0; // 未hash的数量重置
         // 强转hashNode
-        let hn = hashed.into_hash_node().unwrap();
+        let hn = hashed.to_hash_node();
         (Hash::from(hn.0), cached)
     }
 }
@@ -400,10 +411,10 @@ impl Trie {
 pub struct GetResult {
     value: Option<Vec<u8>>,
     did_resolve: bool,
-    new_node: Rc<dyn Node>,
+    new_node: Rc<TrieNode>,
 }
 impl GetResult {
-    pub fn from(value: Option<Vec<u8>>, did_resolve: bool, new_node: Rc<dyn Node>) -> GetResult{
+    pub fn from(value: Option<Vec<u8>>, did_resolve: bool, new_node: Rc<TrieNode>) -> GetResult{
         GetResult{value, did_resolve, new_node}
     }
 }

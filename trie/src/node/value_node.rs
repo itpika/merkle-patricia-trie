@@ -2,8 +2,6 @@ use std::{rc::Rc, cell::RefCell};
 
 use crate::writer::EncodeBuffer;
 
-use super::Node;
-
 pub const NIL_VALUE_NODE: ValueNode = ValueNode(Vec::new());
 
 pub struct ValueNode (pub Vec<u8>);
@@ -39,27 +37,27 @@ impl ValueNode {
     }
 }
 
-impl Node for ValueNode {
+impl ValueNode {
     // type MyType = ValueNode;
-    fn cache(&self) -> (Option<HashNode>, bool) {
+    pub(crate) fn cache(&self) -> (Option<HashNode>, bool) {
         return (None, true);
     }
 
-    fn encode(&self, w: Rc<RefCell<EncodeBuffer>>) {
+    pub(crate) fn encode(&self, w: Rc<RefCell<EncodeBuffer>>) {
         let mut wri = w.borrow_mut();
         wri.write_bytes(self.0.as_slice());
     }
 
 
-    fn fstring(&self, _: String) -> String {
+    pub(crate) fn fstring(&self, _: String) -> String {
         format!("{} ", hex::encode(self.0.as_slice()))
     }
 
-    fn kind(&self) -> super::NodeType {
+    pub(crate) fn kind(&self) -> super::NodeType {
         super::NodeType::ValueNode
     }
-    fn into_value_node(&self) -> Result<ValueNode, crate::NodeError> {
-        Ok(ValueNode(self.0.clone()))
+    pub(crate) fn into_value_node(&self) -> ValueNode {
+        ValueNode(self.0.clone())
     }
 }
 

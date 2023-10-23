@@ -3,7 +3,7 @@ use std::{rc::Rc, cell::RefCell, io::Write, future, process::Output};
 use crypto::{sha2::{Sha256}, digest::Digest, hmac, sha3::Sha3};
 use futures::{Future, executor::block_on};
 
-use crate::{node::{HashNode, Node, NodeType, ShortNode, FullNode, ValueNode}, common, writer::{EncodeBuffer}};
+use crate::{node::{HashNode, NodeType, ShortNode, FullNode, ValueNode}, common, writer::{EncodeBuffer}, TrieNode};
 
 pub(crate) struct Hasher {
     hash: Sha3,
@@ -28,14 +28,14 @@ impl Hasher {
         HashNode::from(out)
     }
 
-    pub(crate) fn hash_node(&mut self, n: Rc<dyn Node>, force: bool) -> (Rc<dyn Node>, Rc<dyn Node>) {
+    pub(crate) fn hash_node(&mut self, n: Rc<TrieNode>, force: bool) -> (Rc<TrieNode>, Rc<TrieNode>) {
         let (hs, _) = n.cache(); // 看缓存是否已经计算过
         if let Some(v) = hs {
-            return (Rc::new(v), n);
+            return (Rc::new(TrieNode::Hash(v)), n);
         }
-        match n.kind() {
-            NodeType::ShortNode => {
-                let sn = n.into_short_node().unwrap();
+        match &*n {
+            TrieNode::Short(sn) => {
+                let mut sn = n.to_short_node();
                 // shortNode子节点hash
                 let (collapsed, mut cached_node) = self.hash_short_node_children(sn);
                 // shortNode计算hash
@@ -43,28 +43,27 @@ impl Hasher {
 
                 if hashed.kind() == NodeType::HashNode {
                     // hash缓存起来
-                    cached_node.flags.hash = Some(hashed.into_hash_node().unwrap());
+                    cached_node.flags.hash = Some(hashed.to_hash_node());
                 } else {
                     cached_node.flags.hash = None;
                 }
 
-                return (hashed, Rc::new(cached_node));
+                return (hashed, Rc::new(TrieNode::Short(cached_node)));
             },
-            NodeType::FullNode => {
-                let f_n = n.into_full_node().unwrap();
+            TrieNode::Full(f_n) => {
+                let   = n.to_full_node();
                 // 计算子节点hash
                 let (collapsed, mut cached_node) = self.hash_full_node_children(f_n);
-                // let (collapsed, mut cached_node) = block_on(self.hash_full_node_children(f_n));
                 // 计算fullNode自己的hash
                 let hashed = self.fullnode_to_hash(collapsed, force);
 
                 if hashed.kind() == NodeType::HashNode {
                     // hash缓存起来
-                    cached_node.flags.hash = Some(hashed.into_hash_node().unwrap());
+                    cached_node.flags.hash = Some(hashed.to_hash_node());
                 } else {
                     cached_node.flags.hash = None
                 }
-                return (hashed, Rc::new(cached_node));
+                return (hashed, Rc::new(TrieNode::Full(cached_node)));
             },
             _ => { // 正常情况不会到此
                 return (Rc::clone(&n), n);
@@ -73,47 +72,47 @@ impl Hasher {
     }
 
     // 计算shortNode子节点hash
-    fn hash_short_node_children(&mut self, n: ShortNode) -> (ShortNode, ShortNode) {
-        let mut collapsed = n.into_short_node().unwrap();
-        let mut cached = n.into_short_node().unwrap();
+    fn hash_short_node_children(&mut self, mut n: ShortNode) -> (ShortNode, ShortNode) {
+        let mut collapsed = n.into_short_node();
+        // let mut cached = n.into_short_node().unwrap();
 
         collapsed.key = common::hex_to_compact(&n.key);
 
         if n.val.kind() == NodeType::FullNode || n.val.kind() == NodeType::ShortNode {
-            (collapsed.val, cached.val) = self.hash_node(n.val, false);
+            (collapsed.val, n.val) = self.hash_node(n.val, false);
         }
-        (collapsed, cached)
+        (collapsed, n)
     }
     // 计算shortNode节点hash
-    fn shortnode_to_hash(&mut self, n: ShortNode, force: bool) -> Rc<dyn Node> {
+    fn shortnode_to_hash(&mut self, n: ShortNode, force: bool) -> Rc<TrieNode> {
         // node编码进bufer
         n.encode(Rc::clone(&self.w));
         let enc = self.encod_bytes();
         if enc.len() < 32 && !force {
-            return Rc::new(n);
+            return Rc::new(TrieNode::Short(n));
         }
         // 编码后的数据计算hash
         let hd = self.hash_data(enc.as_slice());
-        Rc::new(hd)
+        Rc::new(TrieNode::Hash(hd))
     }
 
-    async fn async_hash_full_node_children(n: &Option<Rc<dyn Node>>, collapsed: Rc<RefCell<FullNode>>, cached: Rc<RefCell<FullNode>>, i: usize) {
-        let mut new_hasher = Hasher::new(false);
-        match n {
-            Some(child_node) => {
-                let (n1, n2) = new_hasher.hash_node(Rc::clone(child_node), false);
-                collapsed.borrow_mut().children[i] = Some(n1);
-                cached.borrow_mut().children[i] = Some(n2);
-            },
-            None => { // 计算hash赋个空valueNode
-                collapsed.borrow_mut().children[i] = Some(Rc::new(ValueNode::default()));
-            }
-        }
-    }
+    // async fn async_hash_full_node_children(n: &Option<Rc<dyn Node>>, collapsed: Rc<RefCell<FullNode>>, cached: Rc<RefCell<FullNode>>, i: usize) {
+    //     let mut new_hasher = Hasher::new(false);
+    //     match n {
+    //         Some(child_node) => {
+    //             let (n1, n2) = new_hasher.hash_node(Rc::clone(child_node), false);
+    //             collapsed.borrow_mut().children[i] = Some(n1);
+    //             cached.borrow_mut().children[i] = Some(n2);
+    //         },
+    //         None => { // 计算hash赋个空valueNode
+    //             collapsed.borrow_mut().children[i] = Some(Rc::new(ValueNode::default()));
+    //         }
+    //     }
+    // }
 
-    fn hash_full_node_children(&mut self, n: FullNode) -> (FullNode, FullNode) {
-        let mut collapsed = n.into_full_node().unwrap();
-        let mut cached = n.into_full_node().unwrap();
+    fn hash_full_node_children(&mut self, mut n: FullNode) -> (FullNode, FullNode) {
+        let mut collapsed = n.into_full_node();
+        // let mut cached = n.into_full_node().unwrap();
         
         if self.parallel && false {
             // let collapsed = Rc::new(RefCell::new(collapsed));
@@ -136,28 +135,28 @@ impl Hasher {
                     Some(child_node) => {
                         let (n1, n2) = self.hash_node(Rc::clone(child_node), false);
                         collapsed.children[i] = Some(n1);
-                        cached.children[i] = Some(n2);
+                        n.children[i] = Some(n2);
                     },
                     None => { // 计算hash赋个空valueNode
-                        collapsed.children[i] = Some(Rc::new(ValueNode::default()));
+                        collapsed.children[i] = Some(Rc::new(TrieNode::Value(ValueNode::default())));
                     }
                 }
             }
         }
-        (collapsed, cached)
+        (collapsed, n)
     }
 
     // 计算fullNode节点hash
-    fn fullnode_to_hash(&mut self, n: FullNode, force: bool) -> Rc<dyn Node> {
+    fn fullnode_to_hash(&mut self, n: FullNode, force: bool) -> Rc<TrieNode> {
         // node编码进bufer
         n.encode(Rc::clone(&self.w));
         let enc = self.encod_bytes();
         if enc.len() < 32 && !force {
-            return Rc::new(n);
+            return Rc::new(TrieNode::Full(n));
         }
         // 编码后的数据计算hash
         let hd = self.hash_data(enc.as_slice());
-        Rc::new(hd)
+        Rc::new(TrieNode::Hash(hd))
     }
 
     // 取出buffer中的所有数据

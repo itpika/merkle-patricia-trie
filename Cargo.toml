@@ -11,3 +11,4 @@ hex = "0.4.3"
 rust-crypto = "0.2.36"
 "trie" = {path="./trie"}
 tokio = { version = "1", features = ["full"] }
+downcast-rs = "1.2.0"

@@ -9,32 +9,6 @@ pub enum NodeType {
     FullNode,
     NullNode
 }
-// pub trait Node<T: Node+Clone> {
-pub trait Node {
-    // type MyType;
-    fn cache(&self) -> (Option<HashNode>, bool);
-    // fn encode(&self, w: Rc<RefCell<dyn std::io::Write>>) -> io::Result<usize>;
-    fn encode(&self, w: Rc<RefCell<EncodeBuffer>>);
-    fn fstring(&self, v: String) -> String;
-    fn kind(&self) -> NodeType;
-    fn into_value_node(&self) -> Result<ValueNode, NodeError> {
-        Err(NodeError::from("not found"))
-    }
-    fn into_hash_node(&self) -> Result<HashNode, NodeError> {
-        Err(NodeError::from("not found"))
-    }
-    fn into_full_node(&self) -> Result<FullNode, NodeError> {
-        Err(NodeError::from("not found"))
-    }
-    fn into_short_node(&self) -> Result<ShortNode, NodeError> {
-        Err(NodeError::from("not found"))
-    }
-    fn to_string(&self) -> String {
-        self.fstring(String::default())
-    }
-}
-
-// impl<T> NodeClone for T where T: Node + Clone {}
 
 #[derive(Clone)]
 pub struct NilNode;
@@ -44,20 +18,20 @@ impl NilNode {
     }
 }
 
-impl Node for NilNode {
+impl NilNode {
     // type MyType = NilNode;
-    fn cache(&self) -> (Option<HashNode>, bool) {
+    pub(crate) fn cache(&self) -> (Option<HashNode>, bool) {
         (None, false)
     }
 
-    fn encode(&self, w: Rc<RefCell<EncodeBuffer>>) {
+    pub(crate) fn encode(&self, w: Rc<RefCell<EncodeBuffer>>) {
     }
 
-    fn fstring(&self, v: String) -> String {
+    pub(crate) fn fstring(&self, v: String) -> String {
         String::default()
     }
 
-    fn kind(&self) -> NodeType {
+    pub(crate) fn kind(&self) -> NodeType {
         NodeType::NullNode
     }
 }
@@ -90,7 +64,6 @@ impl NodeFlag {
 
 pub mod full_node;
 use std::cell::RefCell;
-use std::io;
 use std::rc::Rc;
 
 pub use full_node::FullNode;

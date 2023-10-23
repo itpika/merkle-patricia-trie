@@ -1,9 +1,6 @@
 use std::{rc::Rc, cell::RefCell};
 use crate::writer::EncodeBuffer;
 
-use super::Node;
-
-
 pub struct HashNode (pub(crate) [u8; 32]);
 // type HashNode2 = Box<[u8; 32]>;
 
@@ -38,25 +35,25 @@ impl HashNode {
 }
 
 
-impl Node for HashNode {
+impl HashNode {
     // type MyType = HashNode;
-    fn cache(&self) -> (Option<HashNode>, bool) {
+    pub(crate) fn cache(&self) -> (Option<HashNode>, bool) {
         return (None, true);
     }
 
-    fn encode(&self, w: Rc<RefCell<EncodeBuffer>>) {
+    pub(crate) fn encode(&self, w: Rc<RefCell<EncodeBuffer>>) {
         let mut wri = w.borrow_mut();
         wri.write_bytes(self.0.as_slice());
     }
-    fn kind(&self) -> super::NodeType {
+    pub(crate) fn kind(&self) -> super::NodeType {
         super::NodeType::HashNode
     }
-    fn fstring(&self, _: String) -> String {
+    pub(crate) fn fstring(&self, _: String) -> String {
         format!("<{}>", hex::encode(self.0))
     }
 
-    fn into_hash_node(&self) -> Result<HashNode, crate::NodeError> {
-        Ok(HashNode(self.0))
+    pub(crate) fn into_hash_node(&self) -> HashNode {
+        HashNode(self.0)
     }
 }
 

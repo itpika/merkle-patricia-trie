@@ -1,9 +1,9 @@
 
-use std::{rc::Rc, cell::{Cell, RefCell}, fmt, future, time::{SystemTime, self}};
+use std::{rc::Rc, cell::{Cell, RefCell}, fmt, future, time::{SystemTime, self}, mem};
 
-use crypto::{sha2::{Sha256, Sha224}, digest::Digest, sha3::Sha3};
+use crypto::{sha2::{Sha256}, digest::Digest};
 use tokio::time::sleep;
-use trie::{node::{hash_node, Node, NilNode}, ID, common::{Hash, self}, Trie};
+use trie::{ID, common::{Hash}, Trie, TrieNode, node::NilNode};
 
 
 
@@ -45,7 +45,32 @@ async fn main2() {
     block_on(do_work());
 }
 
+// 定义一个 trait 和具体类型
+trait MyTrait {
+    fn foo(&self);
+}
+
+struct MyStruct;
+
+impl MyTrait for MyStruct {
+    fn foo(&self) {
+        println!("MyStruct foo");
+    }
+}
+
+
 fn main() {
+
+    let d = Rc::new(TrieNode::Nil(NilNode));
+
+    // match d {
+    //     TrieNode::Short(v) => todo!(),
+    //     TrieNode::Full(v) => todo!(),
+    //     TrieNode::Hash(_) => todo!(),
+    //     TrieNode::Value(_) => todo!(),
+    //     TrieNode::Nil(_) => todo!(),
+    // }
+    
     let mut t: Trie = Trie::new(ID::trie_id(Hash::default()));
 
     // return;    
