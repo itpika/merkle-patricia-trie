@@ -36,7 +36,7 @@ impl Hasher {
         match &*n {
             TrieNode::Short(n) => {
                 // shortNode子节点hash
-                let (collapsed, mut cached_node) = self.hash_short_node_children(n);
+                let (collapsed, mut cached_node) = self.hash_short_node_children(&n.borrow_mut());
                 // shortNode计算hash
                 let hashed = self.shortnode_to_hash(collapsed, force);
 
@@ -47,11 +47,11 @@ impl Hasher {
                     cached_node.flags.hash = None;
                 }
 
-                return (hashed, Rc::new(TrieNode::Short(cached_node)));
+                return (hashed, Rc::new(TrieNode::from_short_node(cached_node)));
             },
             TrieNode::Full(f_n) => {
                 // 计算子节点hash
-                let (collapsed, mut cached_node) = self.hash_full_node_children(f_n);
+                let (collapsed, mut cached_node) = self.hash_full_node_children(&f_n.borrow_mut());
                 // let (collapsed, mut cached_node) = block_on(self.hash_full_node_children(f_n));
                 // 计算fullNode自己的hash
                 let hashed = self.fullnode_to_hash(collapsed, force);
@@ -62,7 +62,7 @@ impl Hasher {
                 } else {
                     cached_node.flags.hash = None
                 }
-                return (hashed, Rc::new(TrieNode::Full(cached_node)));
+                return (hashed, Rc::new(TrieNode::from_full_node(cached_node)));
             },
             _ => { // 正常情况不会到此
                 return (Rc::clone(&n), n);
@@ -88,7 +88,7 @@ impl Hasher {
         n.encode(Rc::clone(&self.w));
         let enc = self.encod_bytes();
         if enc.len() < 32 && !force {
-            return Rc::new(TrieNode::Short(n));
+            return Rc::new(TrieNode::from_short_node(n));
         }
         // 编码后的数据计算hash
         let hd = self.hash_data(enc.as_slice());
@@ -151,7 +151,7 @@ impl Hasher {
         n.encode(Rc::clone(&self.w));
         let enc = self.encod_bytes();
         if enc.len() < 32 && !force {
-            return Rc::new(TrieNode::Full(n));
+            return Rc::new(TrieNode::from_full_node(n));
         }
         // 编码后的数据计算hash
         let hd = self.hash_data(enc.as_slice());

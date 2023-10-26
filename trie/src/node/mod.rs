@@ -10,32 +10,6 @@ pub enum NodeType {
     NullNode
 }
 
-#[derive(Clone)]
-pub struct NilNode;
-impl NilNode {
-    pub fn new() -> Self {
-        NilNode
-    }
-}
-
-impl NilNode {
-    // type MyType = NilNode;
-    pub(crate) fn cache(&self) -> (Option<HashNode>, bool) {
-        (None, false)
-    }
-
-    pub(crate) fn encode(&self, w: Rc<RefCell<EncodeBuffer>>) {
-    }
-
-    pub(crate) fn fstring(&self, v: String) -> String {
-        String::default()
-    }
-
-    pub(crate) fn kind(&self) -> NodeType {
-        NodeType::NullNode
-    }
-}
-
 pub(crate) struct NodeFlag {
     pub(crate) hash: Option<HashNode>, // 表示是否计算有hash数据
     pub(crate) dirty: bool, 

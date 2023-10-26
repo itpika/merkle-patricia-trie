@@ -3,7 +3,7 @@ use std::{rc::Rc, cell::{Cell, RefCell}, fmt, future, time::{SystemTime, self}, 
 
 use crypto::{sha2::{Sha256}, digest::Digest};
 use tokio::time::sleep;
-use trie::{ID, common::{Hash}, Trie, TrieNode, node::NilNode};
+use trie::{ID, common::{Hash}, Trie};
 
 
 
@@ -61,15 +61,10 @@ impl MyTrait for MyStruct {
 
 fn main() {
 
-    let d = Rc::new(TrieNode::Nil(NilNode));
-
-    // match d {
-    //     TrieNode::Short(v) => todo!(),
-    //     TrieNode::Full(v) => todo!(),
-    //     TrieNode::Hash(_) => todo!(),
-    //     TrieNode::Value(_) => todo!(),
-    //     TrieNode::Nil(_) => todo!(),
-    // }
+    let a = Some(1);
+    if a.is_some() {
+        
+    }
     
     let mut t: Trie = Trie::new(ID::trie_id(Hash::default()));
 
